@@ -1,0 +1,42 @@
+name: apimesh uses issue data to run llmchains 
+
+on:
+  issues:
+    types:
+      - labeled
+  pull_request:
+    types:
+      - labeled
+
+jobs:
+  process-with-ai:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'apimesh'
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Install Python Dependencies
+        run: |
+          pip install fastapi pydantic langchain
+
+      - name: Fetch Issue Data
+        run: |
+          ISSUE_DATA=$(gh issue view ${{ github.event.issue.number }} --json title,body,comments -t '{{.title}}|{{.body}}{{range .comments}}|{{.body}}{{end}}')
+          echo "ISSUE_DATA=$ISSUE_DATA" >> $GITHUB_ENV
+
+      - name: Run Apimesh Python Script
+        run: python ./apimesh.py "$ISSUE_DATA" "$OPENAI_API_KEY"
+
+      - name: Post AI Response as Comment
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "$(cat ai_response.txt)"
+          gh issue edit ${{ github.event.issue.number }} --remove-label "apimesh"
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+
