@@ -82,8 +82,15 @@ jobs:
               --arg issueNumber "$ISSUE_NUMBER" \
               --arg issueBody "$ISSUE_BODY_JSON" \
               --arg comments "$COMMENTS_JSON" \
-              '{model: $model, messages: [{role: "system", content: $taskContent}, {role: "user", content: ($issueTitle +
-" (Issue Number: " + $issueNumber + ", Body: " + $issueBody + ")")}, $formattedMessages]}' )
+              --argjson formattedMessages "$FORMATTED_MESSAGES_JSON" \
+              '{
+                model: $model,
+                messages: [
+                  {role: "system", content: $taskContent},
+                  {role: "user", content: ($issueTitle + " (Issue Number: " + $issueNumber + ", Body: " + $issueBody + ")")},
+                  $formattedMessages
+                ]
+              }')
           echo "Prompt: $PROMPT"
 
           # Send a request to the OpenAI API
