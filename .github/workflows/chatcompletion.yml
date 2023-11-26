@@ -1,0 +1,77 @@
+name: ask llm to comment when user adds chatcompletion as a tag to issue or pr
+
+on:
+  issues:
+    types:
+      - labeled
+  pull_request:
+    types:
+      - labeled
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Check for 'chatcompletion' label
+        run: |
+          if [[ ${{ github.event.label.name }} == "chatcompletion" ]]; then
+            echo "Label 'chatcompletion' was added!"
+          else
+            echo "Label 'chatcompletion' was not added. Workflow will be skipped."
+            exit 0
+          fi
+          
+      - name: Process Issue
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          # Escape special JSON characters in shell variables
+          ISSUE_TITLE_JSON=$(jq -aRs . <<< "$ISSUE_TITLE")
+          ISSUE_BODY_JSON=$(jq -aRs . <<< "$ISSUE_BODY")
+
+          # Debugging: Print the JSON variables
+          echo "Issue Title JSON: $ISSUE_TITLE_JSON"
+          echo "Issue Body JSON: $ISSUE_BODY_JSON"
+
+          # Check if variables are empty and set them to null JSON value if they are
+          if [ -z "$ISSUE_TITLE_JSON" ]; then
+            ISSUE_TITLE_JSON="null"
+          fi
+          if [ -z "$ISSUE_BODY_JSON" ]; then
+            ISSUE_BODY_JSON="null"
+          fi
+
+          # Formulate the prompt
+          PROMPT=$(jq -n \
+              --arg model "gpt-3.5-turbo" \
+              --arg taskContent "Task: Identify five distinct, efficient methods for resolving a specific problem or task. Prompt: 'List five different methods to address [specific issue or task]. Focus on approaches with the fewest steps. Detail the key steps and highlight the efficiency of each method.' Requirement: Responses should offer varied, straightforward solutions. Each method must be uniquely efficient, emphasizing minimalism in steps and process complexity." \
+              --arg issueTitle "$ISSUE_TITLE_JSON" \
+              --arg issueNumber "$ISSUE_NUMBER" \
+              --arg issueBody "$ISSUE_BODY_JSON" \
+              '{model: $model, messages: [{role: "system", content: $taskContent}, {role: "user", content: ($issueTitle + " (Issue Number: " + $issueNumber + ", Body: " + $issueBody + ")")}]}' )
+
+          echo "Prompt: $PROMPT"
+
+          # Send a request to the OpenAI API
+          RESPONSE=$(curl -s "https://api.openai.com/v1/chat/completions" \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer $OPENAI_API_KEY" \
+              -d "$PROMPT"
+          )
+          echo "Response: $RESPONSE"
+
+          # Extract the answer
+          ANSWER=$(echo "$RESPONSE" | jq -r .choices[0].message.content)
+          echo "Answer: $ANSWER"
+
+          echo "$GH_PAT" | gh auth login --with-token
+          gh issue comment "$ISSUE_NUMBER" --body "$ANSWER"
+          gh issue edit --remove-label "chatcompletion"
