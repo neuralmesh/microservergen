@@ -32,7 +32,9 @@ jobs:
           gh issue view ${{ github.event.issue.number }} --json title,body,comments -t '{{.title}}|{{.body}}{{range .comments}}|{{.body}}{{end}}' > issue_data.txt
 
       - name: Run Apimesh Python Script
-        run: python ./apimesh.py "$(cat issue_data.txt)" "$OPENAI_API_KEY"
+        run: python ./apimesh.py "$(cat issue_data.txt)"
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Post AI Response as Comment
         run: |
