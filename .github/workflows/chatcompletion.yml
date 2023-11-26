@@ -48,6 +48,31 @@ jobs:
           ISSUE_TITLE_JSON=$(jq -aRs . <<< "$ISSUE_TITLE")
           ISSUE_BODY_JSON=$(jq -aRs . <<< "$ISSUE_BODY")
           COMMENTS_JSON=$(jq -aRs . <<< "$COMMENTS")
+          # Extract comments as an array
+          COMMENTS_ARRAY=$(echo $COMMENTS_JSON | jq -c '.[]')
+
+          # Initialize an empty array for formatted messages
+          FORMATTED_MESSAGES=()
+
+          # Variable to keep track of the current role
+          CURRENT_ROLE="user"
+
+          # Iterate through each comment
+          for COMMENT in $COMMENTS_ARRAY
+          do
+              # Append the comment with the current role to the formatted messages
+              FORMATTED_MESSAGES+=("{\"role\": \"$CURRENT_ROLE\", \"content\": $COMMENT}")
+
+              # Toggle the current role for the next iteration
+              if [ "$CURRENT_ROLE" = "user" ]; then
+                  CURRENT_ROLE="assistant"
+              else
+                  CURRENT_ROLE="user"
+              fi
+          done
+
+          # Join the formatted messages into a JSON array
+          FORMATTED_MESSAGES_JSON=$(printf '%s\n' "${FORMATTED_MESSAGES[@]}" | jq -s '.')
 
           # Formulate the prompt with comments
           PROMPT=$(jq -n \
@@ -57,7 +82,8 @@ jobs:
               --arg issueNumber "$ISSUE_NUMBER" \
               --arg issueBody "$ISSUE_BODY_JSON" \
               --arg comments "$COMMENTS_JSON" \
-              '{model: $model, messages: [{role: "system", content: $taskContent}, {role: "user", content: ($issueTitle + " (Issue Number: " + $issueNumber + ", Body: " + $issueBody + ")")}, {role: "user", content: $comments}]}' )
+              '{model: $model, messages: [{role: "system", content: $taskContent}, {role: "user", content: ($issueTitle +
+" (Issue Number: " + $issueNumber + ", Body: " + $issueBody + ")")}, $formattedMessages]}' )
           echo "Prompt: $PROMPT"
 
           # Send a request to the OpenAI API
