@@ -1,4 +1,4 @@
-name: ask llm to comment when user adds chatcompletion as a tag to issue or pr
+name: Ask LLM to Comment When 'chatcompletion' Label is Added
 
 on:
   issues:
@@ -17,94 +17,18 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Check for 'chatcompletion' label
+        if: github.event.label.name == 'chatcompletion'
         run: |
-          if [[ ${{ github.event.label.name }} == "chatcompletion" ]]; then
-            echo "Label 'chatcompletion' was added!"
-          else
-            echo "Label 'chatcompletion' was not added. Workflow will be skipped."
-            exit 0
-          fi
-          
-      - name: Fetch Issue Comments
-        id: comments
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-        run: |
-          echo "$GH_PAT" | gh auth login --with-token
-          COMMENTS=$(gh issue view "$ISSUE_NUMBER" --json comments -q '.comments')
-          echo "::set-output name=comments::$COMMENTS"
+          echo "Label 'chatcompletion' was added. Running the script."
 
-      - name: Process Issue
+          # Set required environment variables
+          echo "GH_PAT=${{ secrets.GH_PAT }}" >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
+          echo "ISSUE_NUMBER=${{ github.event.issue.number }}" >> $GITHUB_ENV
+
+          # Run the script
+          ./chatcompletion.sh
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          COMMENTS: ${{ steps.comments.outputs.comments }}
-        run: |
-          # Escape special JSON characters in shell variables
-          ISSUE_TITLE_JSON=$(jq -aRs . <<< "$ISSUE_TITLE")
-          ISSUE_BODY_JSON=$(jq -aRs . <<< "$ISSUE_BODY")
-          COMMENTS_JSON=$(jq -aRs . <<< "$COMMENTS")
-          # Extract comments as an array
-          COMMENTS_ARRAY=$(echo $COMMENTS_JSON | jq -c '.[]')
 
-          # Initialize an empty array for formatted messages
-          FORMATTED_MESSAGES=()
-
-          # Variable to keep track of the current role
-          CURRENT_ROLE="user"
-
-          # Iterate through each comment
-          for COMMENT in $COMMENTS_ARRAY
-          do
-              # Append the comment with the current role to the formatted messages
-              FORMATTED_MESSAGES+=("{\"role\": \"$CURRENT_ROLE\", \"content\": $COMMENT}")
-
-              # Toggle the current role for the next iteration
-              if [ "$CURRENT_ROLE" = "user" ]; then
-                  CURRENT_ROLE="assistant"
-              else
-                  CURRENT_ROLE="user"
-              fi
-          done
-
-          # Join the formatted messages into a JSON array
-          FORMATTED_MESSAGES_JSON=$(printf '%s\n' "${FORMATTED_MESSAGES[@]}" | jq -s '.')
-
-          # Formulate the prompt with comments
-          PROMPT=$(jq -n \
-              --arg model "gpt-4-1106-preview" \
-              --arg taskContent "Task: You are apimesh, a next-generation LLM interface specialized in providing concise, efficient solutions for github issues. your focus is on simplifying complex problems and offering easy-to-understand solutions, using the available context only. if you in any way shape or form think you need more context, clearly formulate why and how to get it."\
-              --arg issueTitle "$ISSUE_TITLE_JSON" \
-              --arg issueNumber "$ISSUE_NUMBER" \
-              --arg issueBody "$ISSUE_BODY_JSON" \
-              --arg comments "$COMMENTS_JSON" \
-              --argjson formattedMessages "$FORMATTED_MESSAGES_JSON" \
-              '{
-                model: $model,
-                messages: [
-                  {role: "system", content: $taskContent},
-                  {role: "user", content: ($issueTitle + " (Issue Number: " + $issueNumber + ", Body: " + $issueBody + ")")},
-                  $formattedMessages
-                ]
-              }')
-          echo "Prompt: $PROMPT"
-
-          # Send a request to the OpenAI API
-          RESPONSE=$(curl -s "https://api.openai.com/v1/chat/completions" \
-              -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $OPENAI_API_KEY" \
-              -d "$PROMPT"
-          )
-          echo "Response: $RESPONSE"
-
-          # Extract the answer
-          ANSWER=$(echo "$RESPONSE" | jq -r .choices[0].message.content)
-          echo "Answer: $ANSWER"
-
-          echo "$GH_PAT" | gh auth login --with-token
-          gh issue comment "$ISSUE_NUMBER" --body "$ANSWER"
-          gh issue edit "$ISSUE_NUMBER" --remove-label "chatcompletion"
