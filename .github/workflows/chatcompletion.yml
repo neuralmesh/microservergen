@@ -74,4 +74,4 @@ jobs:
 
           echo "$GH_PAT" | gh auth login --with-token
           gh issue comment "$ISSUE_NUMBER" --body "$ANSWER"
-          gh issue edit --remove-label "chatcompletion"
+          gh issue edit "$ISSUE_NUMBER" --remove-label "chatcompletion"
