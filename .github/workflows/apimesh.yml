@@ -23,7 +23,7 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
-          pip install fastapi pydantic langchain
+          pip install fastapi pydantic langchain openai
 
       - name: Fetch Issue Data
         env:
