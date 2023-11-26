@@ -5,6 +5,7 @@ cat <<EOF > requirements.txt
 fastapi
 uvicorn[standard]
 langchain
+pydantic
 openai
 requests
 EOF
@@ -18,16 +19,16 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY prompt.py /app/
+COPY llmgen.py /app/
 
-CMD ["uvicorn", "microservergen:app", "--host", "0.0.0.0", "--port", "80"]
+CMD ["uvicorn", "llmgen:app", "--host", "0.0.0.0", "--port", "80"]
 EOF
 
 # Step 6: Create docker-compose.yml
 cat <<EOF > docker-compose.yml
 version: '3.8'
 services:
-  microservergen:
+  llmgen:
     build: .
     ports:
       - "8000:80"
