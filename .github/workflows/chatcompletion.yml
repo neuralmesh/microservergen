@@ -21,10 +21,20 @@ jobs:
         run: |
           echo "Label 'chatcompletion' was added. Running the script."
 
-          # Set required environment variables
-          echo "GH_PAT=${{ secrets.GH_PAT }}" >> $GITHUB_ENV
-          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}" >> $GITHUB_ENV
-          echo "ISSUE_NUMBER=${{ github.event.issue.number }}" >> $GITHUB_ENV
+          # Determine if the event is for an issue or pull request and set ISSUE_NUMBER
+          if [ "${{ github.event.issue.number }}" != "" ]; then
+            ISSUE_NUMBER=${{ github.event.issue.number }}
+          elif [ "${{ github.event.pull_request.number }}" != "" ]; then
+            ISSUE_NUMBER=${{ github.event.pull_request.number }}
+          else
+            echo "No issue or pull request number found."
+            exit 1
+          fi
+
+          # Export environment variables
+          export GH_PAT=${{ secrets.GH_PAT }}
+          export OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          export ISSUE_NUMBER=$ISSUE_NUMBER
 
           # Run the script
           ./chatcompletion.sh
