@@ -29,8 +29,6 @@ jobs:
         run: |
           ISSUE_DATA=$(gh issue view ${{ github.event.issue.number }} --json title,body,comments -t '{{.title}}|{{.body}}{{range .comments}}|{{.body}}{{end}}')
           echo "ISSUE_DATA=$ISSUE_DATA" >> $GITHUB_ENV
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
 
       - name: Run Apimesh Python Script
         run: python ./apimesh.py "$ISSUE_DATA" "$OPENAI_API_KEY"
@@ -39,6 +37,4 @@ jobs:
         run: |
           gh issue comment ${{ github.event.issue.number }} --body "$(cat ai_response.txt)"
           gh issue edit ${{ github.event.issue.number }} --remove-label "apimesh"
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
 
